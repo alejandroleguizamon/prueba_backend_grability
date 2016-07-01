@@ -1,0 +1,41 @@
+public function post_confirm() {
+    $service_id = Input::get('service_id');
+    $driver_id = Input::get('driver_id');
+
+    try {
+        if (($servicio = Service::find($service_id)) === NULL) {
+            throw new Exception('3');//servicio no encontrado
+        }
+        if ($servicio->status_id == '6') {
+            throw new Exception('2');//servicio en estado (cancelado?)
+        }
+        if (($servicio->driver_id != NULL) || ($servicio->status_id != '1')) {
+            throw new Exception('1');//servicio con conductor ya asignado o en estado distinto a (disponible?)
+        }
+	if (($driver = Driver::find($driver_id)) === NULL) {
+            throw new Exception('4');//conductor no encontrado
+        }
+        $service_user_uuid = $servicio->user->uuid;
+        $service_user_type = $servicio->user->type;
+        Service::update($service_id, array(
+                'driver_id' => $driver_id,
+                'status_id' => '2',
+		'car_id' => $driver->car_id));
+        Driver::update($driver_id, array("available" => '0'));
+
+        //notificar a usuario!!
+        $pushMessage = 'Tu servicio ha sido confirmado!';
+        $push = Push::make();
+        if ($service_user_uuid != '') {
+            if ($service_user_type == '1') {//iPhone
+                $push->ios($service_user_uuid, $pushMessage, 1, 'honk.wav', 'Open', array('serviceId' => $service_id));
+            } else {
+                $push->android2($service_user_uuid, $pushMessage, 1, 'default', 'Open', array('serviceId' => $service_id));
+            }
+	}
+        return Response::json(array('error' => '0'));
+    }
+    catch(Exception $errcode) {
+        return Response::json(array('error' => $errcode));
+    }
+}
